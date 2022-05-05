@@ -1,0 +1,10 @@
+/* You can add global styles to this file, and also import other style files */
+
+// Include custom of Bootstrap
+@import "./assets/stylesheets/custom-fonts.scss";
+@import "./assets/stylesheets/custom-variables.scss";
+
+// Include all of Bootstrap
+@import "~bootstrap/scss/bootstrap";
+
+// Then add additional custom code here

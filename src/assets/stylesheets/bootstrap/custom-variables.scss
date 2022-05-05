@@ -1,0 +1,1221 @@
+
+var nomeAtividade = "";
+var idModoConsulta = "";
+var buscarSemFiltro = false;
+	
+jQuery("#idCnpj_estte").attr('maxlengh',14);
+jQuery(document).ready(function () {
+	jQuery("#idCnpj_estte").keypress(function (e) {
+		if (e.which != 8 && e.which != 0 && (e.which < 48 || e.which > 57)) {
+				return false;
+	}
+	});
+});
+
+function unlock(numProcesso, imagem) {
+	showCarregando();
+	jQuery.ajax({
+        type: "POST",
+        dataType: 'json',
+        url: globalContextPath + "/areaTrabalho/unlock.do",
+        cache: false,
+        data: { "numProcesso": numProcesso} ,
+        success: function (data) {
+			var elTbodyPanel = jQuery('#id-tbody-panel');
+			if (elTbodyPanel) {
+				var newElementImagePanel = jQuery("<img />", 
+					{
+						'src': globalContextPath + '/includes/images/cadeado-aberto-icon.png',
+				  		'style': 'border: none;' 
+				  	}
+				);
+				
+				elTbodyPanel.find('.link_menu').each(function() {
+					var el = jQuery(this);
+					if (el.html() == numProcesso) {
+						el.parent().parent().remove();
+						return false;
+					}
+				});
+				
+				if (elTbodyPanel.find('tr').size() ==0) {
+					jQuery('#slide').hide();
+				} else {
+					elTbodyPanel.find('tr').each(function(i) {
+						var linha = jQuery(this);
+						linha.removeClass();
+						if ((i % 2) == 0) { 
+							linha.addClass('par');
+						} else {
+							linha.addClass('impar');
+						}
+					});
+					//drawMyProcess(jQuery("#slide-panel"), false);
+				}
+			}
+			
+			var elTbodyMain = jQuery('#id-tbody-area-trabalho');
+			if (elTbodyMain) {
+				var newElementImageMain = jQuery("<img />", 
+					{
+						'src': globalContextPath + '/includes/images/cadeado-aberto-icon.png',
+				  		'style': 'border: none;' 
+				  	}
+				);
+				
+				elTbodyMain.find('.num_processo_link').each(function() {
+					var el = jQuery(this);
+					if (el.children().html() == numProcesso) {
+						var elDiv = el.parent().find('div:first');
+						elDiv.empty();
+						newElementImageMain.appendTo(elDiv);
+						elDiv.parent().prev().html("N&atilde;o atribu&iacute;do");
+						return false;
+					}
+				});
+
+				jqry('#id-tbody-area-trabalho tr[value='+numProcesso+'] ').each(function() {
+					
+					var newElementImage = jQuery("<img />", 
+						{
+							'src': globalContextPath + '/includes/images/cadeado-aberto-icon.png',
+					  		'style': 'border: none;' 
+					  	}
+				  	);
+					jqry(this).attr('class', '');
+					var elDiv = jqry(this).find('div:first');
+					elDiv.empty();
+					newElementImage.appendTo(elDiv);
+					elDiv.parent().prev().html("N&atilde;o atribu&iacute;do");
+				});
+			}
+			closeCarregando();
+        }
+	});
+}
+
+function unlockPanel(numProcesso, imagem) {
+	unlock(numProcesso, imagem);
+}
+
+function getListaAtividades(elemento) {
+	
+	idModoConsulta = jqry(elemento).attr('id');
+	
+	showCarregando();
+	
+	var listaAtividades = '';
+	if (jQuery('#listaAtividades').val() != '-1') {
+		listaAtividades = jQuery('#listaAtividades').val();
+	}
+	
+	var linhasRenderizadas = jQuery('#id-tbody-area-trabalho').find('tr td.dataInicio_ultimoProcesso').toArray();
+	
+	var ultimaLinha = linhasRenderizadas.pop();
+	
+	jQuery.ajax({
+        type: "POST",
+        dataType: 'json',
+        url: globalContextPath + "/areaTrabalho/listarAtividades.do",
+        cache: false,
+        data: {
+			'atividade.numProcesso': jQuery('#numProcesso').val().escape(),
+			'atividade.nomeAtividade': listaAtividades,
+			'atividade.cnpjEstipulante': jQuery('#idCnpj_estte').val(),
+			'atividade.estipulante': jQuery('#idEstipulante').val(),
+			'atividade.sucursal': jQuery('#codigoSucursal').val(),
+			'atividade.origem': jQuery('#listaOrigens').val(),
+			'ultimoElemento':jQuery('#id-area-trabalho tbody').find('tr').not('.tooltip tr').size(),
+			'ultimoDataProcesso': jQuery(ultimaLinha).find('a').html()
+        },
+        success: jsonCallback
+	});
+}
+
+function filtroAreaTrabalho(elemento) {
+	
+	idModoConsulta = jqry(elemento).attr('id');
+	
+	if (jqry('#listaAtividades').val() == '') {
+		jQuery('#total_processos').html('');
+	}
+	
+	jqry('.box_info').fadeOut();
+	jqry('#id-area-trabalho').hide();
+	jqry('#id-tbody-area-trabalho').html('');
+	
+	var existeFiltro = false;
+	jqry('#filtro_area_trabalho input').not('.button').each(function(i, item){
+	    if(jqry(item).val() != "" || (jqry('#listaAtividades').val() != '-1' && jqry('#listaAtividades').val() != '')) {
+	    	existeFiltro = true; 
+	    	return false;
+	    }
+	});
+	
+	if (buscarSemFiltro) {
+		buscarListaAtividadesSemFiltro();
+		buscarSemFiltro = false;
+	}else if(existeFiltro){
+		buscarListaAtividades();
+	} else {
+		if(jqry('#listaAtividades').val() == ''){
+			jQuery.alertbox({
+				'label':'A op&ccedil;&atilde;o "Todas" do filtro de Atividades sem '+
+						'a combina&ccedil;&atilde;o de um outro filtro, ocasiona um '+
+						'tempo de resposta do sistema alto. '+ 
+						'Voc&ecirc; deseja continuar?<br><br><br>',
+				'buttons' : [
+								{'label':'Cancelar', 'callback':function(){closeAlertBox();exibirBoxInformativoInicial();}},
+								{'label':'Continuar', 'callback':function(){closeAlertBox();buscarListaAtividades();}}
+							]
+			});
+		} else {
+			jQuery.alertbox({
+				'label':'Por favor selecione uma atividade.',
+				'buttons' : [
+								{'label':'Ok', 'callback':function(){closeAlertBox();exibirBoxInformativoInicial();}}
+							]
+			});
+		}
+    }
+}
+
+function exibirBoxInformativoInicial() {
+	jqry('.box_info_inicial').fadeIn();
+}
+
+function exibirBoxInformativoVazio() {
+	jqry('.box_info_vazio').fadeIn();
+}
+
+function exibirBoxInformativoSemPermissao(){
+	jqry('.box_info_sem_permissao').fadeIn();
+}
+
+function buscarListaAtividades() {
+
+	var listaAtividades = '';
+	if (jQuery('#listaAtividades').val() != '-1') {
+		listaAtividades = jQuery('#listaAtividades').val();
+	}
+	
+	showCarregando();
+	jQuery('#id-area-trabalho tbody').empty();
+	jQuery.ajax({
+        type: "POST",
+        dataType: 'json',
+        url: globalContextPath + "/areaTrabalho/listarAtividades.do",
+        cache: false,
+        data: {
+            'atividade.numProcesso': jQuery('#numProcesso').val().escape(),
+			 'atividade.nomeAtividade': listaAtividades,
+			 'atividade.cnpjEstipulante': jQuery('#idCnpj_estte').val(),
+			 'atividade.estipulante': jQuery('#idEstipulante').val(),
+			 'atividade.sucursal': jQuery('#codigoSucursal').val(),
+			 'atividade.origem': jQuery('#listaOrigens').val(),
+			 'ultimoElemento':0,
+			 'ultimoNumeroProcesso':0
+        },
+        success: jsonCallback,
+        complete: function(){
+        	jqry('.box_info_inicial').hide();
+        }
+	});	
+}
+
+function buscarListaAtividadesSemFiltro() {
+
+	var listaAtividades = '';
+	if (jQuery('#listaAtividades').val().escape() != '-1') {
+		listaAtividades = jQuery('#listaAtividades').val().escape();
+	}
+	
+	showCarregando();
+	jQuery('#id-area-trabalho tbody').empty();
+	jQuery.ajax({
+        type: "POST",
+        dataType: 'json',
+        url: globalContextPath + "/areaTrabalho/listarAtividades.do",
+        cache: false,
+        data: {
+			 'atividade.nomeAtividade': listaAtividades,
+			 'ultimoElemento':0,
+			 'ultimoNumeroProcesso':0
+        },
+        success: jsonCallback,
+        complete: function(){
+        	jqry('.box_info_inicial').hide();
+        }
+	});	
+}
+
+
+function resetAreaTrabalho() {
+	jQuery('#numProcesso').val('');
+	jQuery('#idCotacao').val('');
+	jQuery('#idCnpj_estte').val('');
+	jQuery('#codigoSucursal').val('');
+	jQuery('#descricaoSucursal').text('');
+	
+	jQuery('#listaAtividades').removeAttr('selected');
+	jQuery('#listaAtividades option:first').attr('selected',true);
+	
+	jqry('#id-area-trabalho').hide();
+	jqry('#id-tbody-area-trabalho').html('');
+	
+	jqry('.box_info_inicial').show();
+}
+
+function jsonCallback(data, textStatus, jqXHR) {
+	
+	if (!data) {
+		closeCarregando();
+		jqry('#id-area-trabalho').hide();
+		exibirBoxInformativoSemPermissao();
+		return false;
+	}
+	
+	var controleAreaTrabalho = false;
+	if(jqry('#id-area-trabalho').is(':visible')) {
+		controleAreaTrabalho = true
+	}
+	
+	if((jQuery(data).size() == 0) && !controleAreaTrabalho){
+		closeCarregando();
+		jqry('#id-area-trabalho').hide();
+		exibirBoxInformativoVazio();
+	} else {
+		try {
+			var tbodyMain = jQuery('#id-area-trabalho tbody');
+			var qtdLinhasExistentes = tbodyMain.find('tr').not('.tooltip tr').size();
+			/*if (data && data.atividades && data.atividades.length < qtdLinhasExistentes) {
+				tbodyMain.empty();
+				qtdLinhasExistentes = 0;
+			}*/
+			
+			jQuery.each(data, function(i,atividade) {
+				var colunas = [];
+				var linkNumProcesso = '';
+				if (atividade.numProcesso) {
+					linkNumProcesso = "<a class='link_menu' href='#'>" + atividade.numProcesso + '</a>';
+					if(atividade.processoComAlteracaoNoCrivo){
+						linkNumProcesso = linkNumProcesso + " <span style='color:red'>*</span> ";
+					}
+					linkNumProcesso = linkNumProcesso + " <input type='hidden' name='retornoCorretor' value='" + atividade.retornoCorretor + "' />";
+				}
+				var hiddenNumProcessoRef = '<input type="hidden"  class="numeroProcessoRef_'+atividade.numProcesso+'"	value="'+atividade.numProcessoReferenciaAnaliseAutomatica +'"/>';
+				
+				colunas.push('<td class="num_processo_link" align="center">' + linkNumProcesso + hiddenNumProcessoRef + '</td>');
+				colunas.push('<td class="atividade" align="center">' + atividade.nomeAtividade + '</td>');
+				
+				var nomeEstipulante = '';
+				if (atividade.estipulante) {
+					nomeEstipulante = atividade.estipulante;
+				}
+				
+				var descricaoTipoCotacao = "";
+				
+				if(atividade.tipoCotacao == 1){
+					descricaoTipoCotacao = "Sa&uacute;de";
+				}
+
+				if(atividade.tipoCotacao == 2){
+					descricaoTipoCotacao = "Dental";
+				}
+				
+				if(atividade.tipoCotacao == 3){
+					descricaoTipoCotacao = "Conjugado";
+				}
+				
+				var sucursal = '' + atividade.sucursal;
+		
+				colunas.push('<td align="center">' + padLeftWith(sucursal, "0", 3) + '</td>');
+				colunas.push('<td align="center">' + nomeEstipulante + '</td>');
+
+				if(atividade.qtdVidas == undefined || atividade.qtdVidas == '0'){
+					colunas.push('<td align="center"> -- </td>');
+				}else{
+					colunas.push('<td align="center">' + atividade.qtdVidas + '</td>');
+				}
+
+				colunas.push('<td align="center">' + descricaoTipoCotacao + '</td>');
+				colunas.push('<td class = "dataInicio_ultimoProcesso" align="center"><a>' + atividade.dataInicio + '</a></td>');
+				colunas.push('<td align="center">' + (atividade.previsaoTermino ? atividade.previsaoTermino : '') + '</td>');
+				colunas.push('<td align="center">' + atividade.status + '</td>');
+				colunas.push('<td align="center" class="origem">' + atividade.origem + '</td>');
+		
+				var elDiv = jQuery('<div />');
+				var el;
+				if (atividade.locked) {
+					el = jQuery("<img />", {
+						'id': 'id-cadeado-' + i,
+						'src': globalContextPath + '/includes/images/cadeado-fechado-icon.png', 
+						'title':'Desbloquear Processo',
+						'style':'border: none; cursor: pointer;'
+					});
+				} else {
+					el = jQuery('<img />', {
+						'src': globalContextPath + '/includes/images/cadeado-aberto-icon.png', 
+						'style':'border: none;'
+					});
+				}
+				el.appendTo(elDiv);
+				colunas.push('<td class="cadeado"><div style="width: 100%; text-align: center;">' + elDiv.html() + '</div></td>');
+				
+				/** NOVAS COLUNAS **/
+				var tdBase = '<td class="cadeado">' +
+							 '	<div style="width: 100%; text-align: center;">' + 
+							 '		<img src="URL" title="TITLE" onclick="JS" style="border: none; width: 16px; height: 16px; cursor: pointer;" />' +
+							 '	</div>' +
+							 '</td>';
+				var tdHtml;
+				tdHtml = tdBase.replace('URL', globalContextPath + '/includes/images/lupa.png');
+				tdHtml = tdHtml.replace('TITLE', 'Visualizar Etapa do Processo');
+				tdHtml = tdHtml.replace('JS', 'visualizarEtapaByAreaDeTrabalho(' + atividade.numProcesso + ');');
+				
+				colunas.push(tdHtml);
+				
+				if (!atividade.processoNovoFluxoAssinaturaEletronica) {
+
+				
+				// COLUNA DOS DOCUMENTOS DE PROPOSTA, ESTUDO E CCB - IN�CIO
+				var tdBase = '<td class="cadeado">' +
+							 '	<div style="text-align: center;">' +
+							 '  	<img src="URL" style="border: none; width: 16px; height: 16px; cursor: pointer;" class="icone_documento" onclick="apertarTooltip(this)"/>'
+							 
+							 if(atividade.tipoCotacao == 1 || atividade.tipoCotacao == 2){
+				   tdBase += '			<div class="div_tooltip" style="display: none; width: 700px;">'
+							 } else {
+				   tdBase += '			<div class="div_tooltip" style="display: none; width: 800px;">'			 
+							 }
+				  
+				   tdBase += ' 				<table class="tooltip">' +
+							 ' 					<thead>' +
+							 ' 						<tr>' +
+							 ' 							<th  style="font-size: 11px; width: 100px;">Estudo Assinado</th>' +
+							 ' 							<th  style="font-size: 11px; width: 100px;">Estudo Emitido</th>' +
+							 ' 							<th  style="font-size: 11px; width: 100px;">Proposta Assinada</th>';
+					if(!atividade.processoReativado){
+						tdBase+=' 							<th  style="font-size: 11px; width: 100px;">Proposta Emitida</th>';
+					}
+					
+					tdBase += ' 							<th style="font-size: 11px; width: 100px;">Planilha de Vidas</th>';
+							 
+							 if(atividade.tipoCotacao == 1){
+								 tdBase += ' 							<th style="font-size: 11px; width: 100px;">CCB Sa&uacute;de</th>'
+							 } else if (atividade.tipoCotacao == 2){
+								 tdBase += ' 							<th style="font-size: 11px; width: 100px;">CCB Dental</th>'
+							 } else {
+								 tdBase +=  ' 							<th style="font-size: 11px; width: 100px;">CCB Sa&uacute;de</th>'  +
+								 			' 							<th style="font-size: 11px; width: 100px;">CCB Dental</th>'
+							 }
+			
+				  tdBase +=  ' 						</tr>' +
+							 ' 					</thead>' +
+							 '          		<tbody>' +
+							 '            			<tr>' +
+							 '              			<td class="cadeado" style="width: 100px;">' +
+							 '  	<img src="URL2" onclick="JS" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+							 '              			</td>' + 
+							 '              			<td class="cadeado" style="width: 100px;">' +
+							 '  	<img src="URL2" onclick="JS.1" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+							 '              			</td>' + 							 
+							 '	            			<td class="cadeado" style="width: 100px;">' +
+							 '  	<img src="URL2" onclick="JS2" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+							 '              			</td>';
+				  if(!atividade.processoReativado){
+					tdBase +=		 '	            			<td class="cadeado" style="width: 100px;">' +
+							 '  	<img src="URL2" onclick="JS2.1" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+							 '              			</td>';
+				  }
+				  
+					tdBase += '	            			<td class="cadeado" style="width: 100px;">' +
+					 '  	<img src="URL3" onclick="JS2.2" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+					 '              			</td>';
+				  
+							 if(atividade.tipoCotacao == 1){
+								 tdBase +=  '	        <td class="cadeado" style="width: 100px;">' +
+						 			'  	<img class="boleto_saude" src="URL2" onclick="JS3" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+						 			'           </td>'
+								 
+							 } else if(atividade.tipoCotacao == 2){
+								 tdBase +=  '	        <td class="cadeado" style="width: 100px;">' +
+						 			'  	<img class="boleto_dental" src="URL2" onclick="JS4" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+						 			'           </td>'
+							 } else {
+								 tdBase +=  '	    	<td class="cadeado" style="width: 100px;">' +
+						 			'  	<img class="boleto_saude" src="URL2" onclick="JS3" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+						 			'              		</td>' +
+							 '	            			<td class="cadeado" style="width: 100px;">' +
+							 '  	<img class="boleto_dental" src="URL2" onclick="JS4" style="border: none; width: 16px; height: 16px; cursor: pointer;"/>' +
+							 '              			</td>'
+							 }
+				
+							 tdBase += ' 		   </tr>' +
+							 		   ' 		</tbody>' +
+							 		   ' 	 </table>' +
+							 		   '    </div>' +
+							 		   '  </div>' +
+							 		   '</td>';
+				
+				tdHtml = tdBase.replace('URL', globalContextPath + '/includes/images/icon_pdf.png');
+				tdHtml = tdHtml.replaceAll('URL2', globalContextPath + '/includes/images/pdfIcone.png');
+				tdHtml = tdHtml.replaceAll('URL3', globalContextPath + '/includes/images/excel_areatrabalho.png');
+				tdHtml = tdHtml.replace('JS', 'gerarEstudoByAreaDeTrabalho(' + atividade.numProcesso + ');');
+				tdHtml = tdHtml.replace('JS.1', 'gerarEstudoEmitidoByAreaDeTrabalho(' + atividade.numProcesso + ');');
+				tdHtml = tdHtml.replace('JS2', 'gerarPropostaByAreaDeTrabalho(' + atividade.numProcesso + ');');
+				
+				if(!atividade.processoReativado){
+					tdHtml = tdHtml.replace('JS2.1', 'gerarPropostaEmitidaByAreaDeTrabalho(' + atividade.numProcesso + ');');
+				}
+				
+				tdHtml = tdHtml.replace('JS2.2', 'gerarPlanilhaImportacaoVidasByAreaDeTrabalho(' + atividade.numProcesso + ');');
+				
+				tdHtml = tdHtml.replaceAll('JS3', 'gerarBoletoByAreaDeTrabalho(' + atividade.numProcesso + ', this);');
+				tdHtml = tdHtml.replaceAll('JS4', 'gerarBoletoByAreaDeTrabalho(' + atividade.numProcesso + ', this);');
+				
+				}
+
+				else {
+					tdHtml = "";
+					var tdBase = '<td class="cadeado">' +
+							 '	<div class="recebe-template-tooltip" style="text-align: center;">' +
+							 '  	<img src="' + globalContextPath + '/includes/images/icon_pdf.png" style="border: none; width: 16px; height: 16px; cursor: pointer;" class="icone_documento" onclick="apertarTooltip(this)"/>'
+
+					tdBase += ' </div>' +
+						'</td>';
+
+					var templateTooltip = jQuery("[templateTooltip]").clone();
+					templateTooltip.removeAttr("templateTooltip");
+					if (!atividade.existeDocumento) {
+						templateTooltip.addClass("tooltip-width-4-colunas");
+					}
+					
+					var tdElementoBase = jQuery(tdBase);
+					tdElementoBase.find(".recebe-template-tooltip").append(templateTooltip);
+
+					// Remove as colunas nao necessarias para esta tela do template tooltip 
+					tdElementoBase.find(".tp-col-condicoes").remove();
+					
+					// Remove colunas Dental ou Saude 
+					if(atividade.tipoCotacao == 1) {
+						jQuery(tdElementoBase).find( ".tp-col-ccb-dental" ).remove();
+					}
+					if (atividade.tipoCotacao == 2) {
+						jQuery(tdElementoBase).find(".tp-col-ccb-saude" ).remove();
+					}
+
+					// Define se as Colunas Download e Reenviar estaram ativas 
+					if (!atividade.existeDocumento) {
+						tdElementoBase.find(".tp-col-reenviar").remove();
+						tdElementoBase.find(".tp-col-status-proposta").remove();
+						tdElementoBase.find(".tp-col-download").remove();
+					} else if ( atividade.situacaoDocumento != 3 ){
+						jQuery(tdElementoBase).find(".proposta-assinada" ).removeClass("coluna-hide");
+						jQuery(tdElementoBase).find(".reenviar-inativo" ).removeClass("coluna-hide");
+						jQuery(tdElementoBase).find(".download-ativo" ).removeClass("coluna-hide");
+						jQuery(tdElementoBase).find("td.tp-col-download a" ).attr('href', globalContextPath + '/p8FileHandler/getFile.do?codigoDocumento=' + atividade.codigoDocumentoAssinado + '').attr('target','_blank');
+					} else {
+						jQuery(tdElementoBase).find(".aguardando-assinatura" ).removeClass("coluna-hide");
+						jQuery(tdElementoBase).find(".reenviar-ativo" ).removeClass("coluna-hide");
+						jQuery(tdElementoBase).find(".download-inativo" ).removeClass("coluna-hide");
+					}
+
+					jQuery(tdElementoBase).find("td.tp-col-cotacao a" ).attr('href', "../areaTrabalho/impressaoCotacao.do?numProcesso=" + atividade.numProcesso + "");
+					jQuery(tdElementoBase).find("td.tp-col-reenviar a" ).attr('onClick', 'carregaReenviarTooltipNovo(' + atividade.numProcesso + ');');
+					jQuery(tdElementoBase).find("td.tp-col-planilha a" ).attr('onClick', 'gerarPlanilhaImportacaoVidasByAreaDeTrabalho(' + atividade.numProcesso + ');');
+					jQuery(tdElementoBase).find("td.tp-col-ccb-dental a" ).attr('onClick', 'gerarBoletoByAreaDeTrabalho(' + atividade.numProcesso + ', this);');
+					jQuery(tdElementoBase).find("td.tp-col-ccb-saude a" ).attr('onClick', 'gerarBoletoByAreaDeTrabalho(' + atividade.numProcesso + ', this);');
+
+					tdHtml += '<td class="cadeado">' ;
+					tdHtml += tdElementoBase.html();
+					tdHtml += '</td>';
+
+				}
+				
+
+				colunas.push(tdHtml);
+				// COLUNA DOS DOCUMENTOS DE PROPOSTA, ESTUDO E CCB - FIM
+				
+				/** NOVAS COLUNAS **/
+				
+				/*if (qtdLinhasExistentes > 0) {
+					tbodyMain.children().first().remove();
+					qtdLinhasExistentes--;
+				}*/
+
+				var el;
+				
+				//GD2015-000146 Reativacao Processo - Definido que a preced&eacute;cia e a reativa&ccedil;&atilde;o de processo pelo Antonio.
+				if(atividade.processoReativado){
+					el = jQuery("<tr />", { "class": "styleProcessoReativado", "html": colunas.join("") , "title": atividade.cnpjEstipulante }).appendTo(tbodyMain.not('.tooltip tbody'));					
+				}
+				else if(atividade.retornoCorretor){
+					el = jQuery("<tr />", { "class": "styleRetornoCorretor", "html": colunas.join("") , "title": atividade.cnpjEstipulante }).appendTo(tbodyMain.not('.tooltip tbody'));					
+				}
+				else if(atividade.numProcessoReferenciaAnaliseAutomatica != undefined && atividade.numProcessoReferenciaAnaliseAutomatica != null && atividade.numProcessoReferenciaAnaliseAutomatica != 0 && atividade.numProcessoReferenciaAnaliseAutomatica != '' 
+					&& atividade.numProcessoReferenciaAnaliseAutomatica != atividade.numProcesso){
+					el = jQuery("<tr />", { "class": "styleProcessoAnaliseAutomatica " + atividade.nomeFilaTrabalho , "value": atividade.numProcessoReferenciaAnaliseAutomatica, "html": colunas.join("") , "title": atividade.cnpjEstipulante }).appendTo(tbodyMain.not('.tooltip tbody'));					
+				}
+				else{
+					el = jQuery("<tr />", { "class": ((i % 2) == 0 ? "" : "off") , "html": colunas.join("") , "title": atividade.cnpjEstipulante }).appendTo(tbodyMain.not('.tooltip tbody'));
+				}
+
+				tbodyMain.find('#id-cadeado-' + i).click(
+					function() {
+						unlock(atividade.numProcesso, jQuery(this));
+					}
+				);
+				
+				if (jqry('#filtroAreaTrabalho').attr('id') == idModoConsulta) {
+					if(jQuery('#listaAtividades').val().escape() != '' && jQuery('#listaAtividades').val().escape() != '-1'){
+						jQuery('#total_processos').html('');
+						jQuery('#total_processos').html('Total de Processos: ' + atividade.numeroTotalProcessos);
+					}
+				}
+
+			});
+						
+			tbodyMain.find('tr').each(function() {
+				
+				if (jQuery(this).has('.link_menu')) {
+					
+					var numProcesso = jQuery(this).find('.link_menu').html();
+					
+					jQuery(this).find('td').not('.cadeado').each(function() {
+						
+						jQuery(this).click(function() {
+							// GD 2016 000069
+							
+							var tr =  jqry(this).parents();
+							if (jqry(tr).hasClass("styleProcessoAnaliseAutomatica")) {
+								var numProcessoReferencia = jqry('.numeroProcessoRef_'+numProcesso).val().escape();
+								
+								var msg = '';
+								if (jqry(tr).hasClass('FT_EEEM_SPG_BlqTransfMatriz')) {
+									msg = 'Aten&ccedil;&atilde;o! Existe processo em an&aacute;lise '
+										+ 'pela Sucursal para o mesmo CNPJ, com a mesma quantidade de vidas, ' 
+										+ 'transfer&ecirc;ncias informadas e coparticipa&ccedil;&atilde;o. A an&aacute;lise deste processo '
+										+ 'ser&aacute; realizada automaticamente atrav&eacute;s do processo ';
+								} else {
+									msg = 'Aten&ccedil;&atilde;o! Existe processo em an&aacute;lise '
+										+ 'pela Sucursal para o mesmo CNPJ, com a mesma quantidade de vidas ' 
+										+ 'e transfer&ecirc;ncias informadas. A an&aacute;lise deste processo '
+										+ 'ser&aacute; realizada automaticamente atrav&eacute;s do processo ';
+								}
+								
+								jqry.alertbox({'label': msg + numProcessoReferencia + '. <br /> <br /> <br />&nbsp;'});
+							}else{
+								var link = globalContextPath + "/workflow.do?numProcesso=" + numProcesso.escape();
+								
+								location.href = link;
+								showCarregando();
+							}
+							
+							
+						});
+					});	
+				}
+				
+				jQuery(this).find('.icone_documento').each(function() {
+					apertarTooltip(this);
+				});
+			});
+		} catch (err) {
+		} finally {
+			closeCarregando();
+			jqry('.box_info_vazio').hide();
+			jqry('#id-area-trabalho').show();
+			jQuery(window).scrollTop(jQuery('#id-refresh').offset().top);
+		}
+	};
+}
+
+function enableBtnReenvio(event) {
+    flagReenvioTitular = jQuery('#checkboxEstipulante').is(":checked");
+    flagReenvioCorretor = jQuery('#checkboxCorretor').is(":checked");
+
+    var emailEstipulante = jQuery('#emailEstipulante').val();
+    var emailCorretor = jQuery('#emailCorretor').val();
+
+    if (emailEstipulante.toUpperCase().trim() === emailCorretor.toUpperCase().trim() ){
+       document.getElementById('btnReenviaTooltipModal').setAttribute("disabled","disabled");
+       jQuery('#emailEstipulante').val('');
+       jQuery.alertbox({ 'label': 'E-mail do estipulante n&atilde;o deve ser o mesmo do corretor.' });
+    } else {
+        controleBtnReenvio(flagReenvioTitular || flagReenvioCorretor);
+    }
+}
+
+function controleBtnReenvio(habilitar) {
+    if (habilitar)
+        document.getElementById('btnReenviaTooltipModal').removeAttribute("disabled");
+    else
+        document.getElementById('btnReenviaTooltipModal').setAttribute("disabled","disabled");
+}
+
+function validarDadosEmailBlur(input) {
+    if (input != null) {
+        if (!validarEmail(input.value))
+            input.value = '';
+    }
+    var emailEstipulante = jQuery('#emailEstipulante').val();
+    var emailCorretor = jQuery('#emailCorretor').val();
+
+    if (emailEstipulante.toUpperCase().trim() === emailCorretor.toUpperCase().trim() ){
+       input.value = '';
+       jQuery.alertbox({ 'label': 'E-mail do estipulante n&atilde;o deve ser o mesmo do corretor.' });
+    }
+}
+
+function fecharFancy(){
+	jQuery("#fancybox-close").click();
+}
+
+function isValid(dado) {
+    if (dado != undefined && dado != null)
+        return true;
+    return false;
+}
+
+function isNotEmpty(dado) {
+    if (isValid(dado) && dado.trim() != "")
+        return true;
+    return false;
+}
+
+function carregaReenviarTooltipNovo(numProcesso) {
+	showCarregando();
+	// Verifica se esta na pagina Area de Trabalho ou Acompanhamento de Processos para chamar o metodo equivalente
+	if (window.location.href.indexOf("areaTrabalho") > -1) {
+		var paginaAtual = "areaTrabalho";
+		var dataParamentro = "atividade.numProcesso";
+	} else {
+		var paginaAtual = "relatorio";
+		var dataParamentro = "numProcesso";
+	}
+
+	var data = {};
+	data[dataParamentro] = numProcesso;
+	jQuery.ajax({
+		type: 'get',
+		dataType: 'json',
+		url: globalContextPath + '/' + paginaAtual + '/retornaDadosParaReenvioProposta.do',
+		cache: false,
+		data: data,
+		success: function (dataRetorno) {
+
+			closeCarregando();
+			var checkboxEstipulante = false;
+			var checkboxCorretor = false;
+
+			if (isValid(dataRetorno)) {
+				if (isValid(dataRetorno.estipulante)) {
+					nome = isValid(dataRetorno.estipulante.nome) ? dataRetorno.estipulante.nome : '';
+					email = isValid(dataRetorno.estipulante.email) && validarEmail(dataRetorno.estipulante.email) ? dataRetorno.estipulante.email : '';
+				}
+				if (isValid(dataRetorno.corretor)) {
+					nomeCorretor = isValid(dataRetorno.corretor.nome) ? dataRetorno.corretor.nome : '';
+					emailCorretor = isValid(dataRetorno.corretor.email) && validarEmail(dataRetorno.corretor.email) ? dataRetorno.corretor.email : '';
+				}
+			}
+
+			jQuery("#tabelaDadosEstipulanteCorretor tr").remove();
+			jQuery("#btnReenviaTooltipModal").attr("disabled", "disabled");
+
+			var rowCabecelho = jQuery('<tr>');
+			var colsCabecalho = '';
+			colsCabecalho +=      '<td class="td-align-center" width="8%"></td>';
+			colsCabecalho +=      '<td class="td_campo_novo label_corretor" width="45%" > Estipulante </td>';
+			colsCabecalho +=       '<td class="td_campo_novo label_corretor" width="45%" > E-mail </td>';
+
+			rowCabecelho.append(colsCabecalho);
+			jQuery("#tabelaDadosEstipulanteCorretor").append(rowCabecelho);
+
+			var row = jQuery('<tr>');
+			var cols = '';
+
+			cols += '<td class="td-align-center" width="8%" >' +
+						'<input type="checkbox" onchange="enableBtnReenvio(this)" id="checkboxEstipulante" name="checkboxEstipulante" value="'+ checkboxEstipulante +'" />' +
+					'</td>';
+			cols += '<td  class="td_label_novo nomeInput" width="45%" id="nomeEstipulante">' +
+						'<span>' +
+							nome  +
+						'</span>' +
+						'</td>';
+			cols += '<td  class="td_label_novo" width="45%">' +
+						'<input id="emailEstipulante" onblur="validarDadosEmailBlur(this)" name="emailEstipulante" class="input_novo" value="' +
+							email +  '" placeholder="Digite o E-mail" />' +
+						'</td>';
+			row.append(cols);
+			jQuery("#tabelaDadosEstipulanteCorretor").append(row);
+
+			row = jQuery('<tr class="tr-border-bottom">');
+			cols = '<td class="td-align-center" width="8%"></td>';
+			cols +=  '<td  width="45%" ></td>';
+			cols +=   '<td  width="45%" class="td_label_mensagem" > Caso necess�rio, altere o e-mail acima. </td>';
+			row.append(cols);
+			jQuery("#tabelaDadosEstipulanteCorretor").append(row);
+
+			var rowCabecelhoCorretor = jQuery('<tr class="tr-margin-top">');
+			var colsCabecalhoCorretor = '<td class="td-align-center" width="8%"></td>';
+
+			colsCabecalhoCorretor += '<td class="td_campo_novo label_corretor" width="45%" > Corretor </td>';
+			colsCabecalhoCorretor += '<td class="td_campo_novo label_corretor" width="45%" > E-mail </td>';
+
+			rowCabecelhoCorretor.append(colsCabecalhoCorretor);
+			jQuery("#tabelaDadosEstipulanteCorretor").append(rowCabecelhoCorretor);
+
+			row = jQuery('<tr>');
+			cols = '<td class="td-align-center" width="8%" >' +
+						'<input type="checkbox" onchange="enableBtnReenvio(this)" id="checkboxCorretor" name="checkboxCorretor" value=" '+ checkboxCorretor +'" />' +
+						'</td>';
+			cols += '<td  class="td_label_novo nomeInput" width="45%" id="nomeCorretor">' +
+						'<span>' +
+							nomeCorretor  +
+							'</span>' +
+						'</td>';
+			cols += '<td  class="td_label_novo" width="45%">' +
+						'<input id="emailCorretor" onblur="validarDadosEmailBlur(this)" name="emailCorretor" class="input_novo" value="' +
+							emailCorretor +  '" placeholder="Digite o E-mail" />' +
+						'</td>';
+			row.append(cols);
+			jQuery("#tabelaDadosEstipulanteCorretor").append(row);
+
+			row = jQuery('<tr>');
+			cols = '<td class="td-align-center" width="8%"></td>';
+			cols +=  '<td  width="45%" >' +
+							'<input type="hidden" id="numProcessoReenviarProposta" name="numProcessoReenviarProposta" value="' + numProcesso + '">' +
+							'<input type="hidden" id="paginaAtual" name="paginaAtual" value="' + paginaAtual + '">' +
+						'</td>';
+			cols +=   '<td  width="45%" class="td_label_mensagem"> Caso necess�rio, altere o e-mail acima. </td>';
+			row.append(cols);
+
+			jQuery("#tabelaDadosEstipulanteCorretor").append(row);
+
+			jQuery.fancybox({
+				'width': '900',
+				'height': 'auto',
+				'padding': 0,
+				'z-index': '400',
+				'transitionIn': 'none',
+				'transitionOut': 'none',
+				'href': '#reenviarTooltipNovo',
+				'showCloseButton': false
+			});
+			jQuery('#fancybox-overlay').css('z-index','500');
+			jQuery('#fancybox-wrap').css('z-index','500');
+		},
+		error: function (e) {
+			closeCarregando();
+			jQuery.alertbox({ 'label': 'Ocorreu um erro. Por favor, tente mais tarde.' });
+		}
+	});
+
+}
+
+function btnReenviarProposta() {
+	fecharFancy();
+	showCarregando();
+	var numProcesso = parseInt(jQuery('#numProcessoReenviarProposta').val().escape());
+	var emailEstipulante = jQuery('#emailEstipulante').val();
+	var emailCorretor = jQuery('#emailCorretor').val();
+	var flagReenvioEstipulante = jQuery('#checkboxEstipulante').is(":checked") ? true : false;
+	var flagReenvioCorretor = jQuery('#checkboxCorretor').is(":checked") ? true : false;
+	var paginaAtual = jQuery('#paginaAtual').val();
+
+	if(paginaAtual == "areaTrabalho") {
+		var parametroNumProcesso = "atividade.numProcesso"
+		var parametroEmailEstipulante = "atividade.emailEstipulante"
+		var parametroEmailCorretor = "atividade.emailCorretor"
+		var parametroFlagReenvioEstipulante = "atividade.flagReenvioEstipulante"
+		var parametroFlagReenvioCorretor = "atividade.flagReenvioCorretor"
+	} else {
+		var parametroNumProcesso = "numProcesso"
+		var parametroEmailEstipulante = "emailEstipulante"
+		var parametroEmailCorretor = "emailCorretor"
+		var parametroFlagReenvioEstipulante = "flagReenvioEstipulante"
+		var parametroFlagReenvioCorretor = "flagReenvioCorretor"
+	}
+
+	var data = {};
+
+	data[parametroNumProcesso] = numProcesso;
+	data[parametroEmailEstipulante] = emailEstipulante;
+	data[parametroEmailCorretor] = emailCorretor;
+	data[parametroFlagReenvioEstipulante] = flagReenvioEstipulante;
+	data[parametroFlagReenvioCorretor] = flagReenvioCorretor;
+
+	jQuery.ajax({
+		type: 'post',
+		dataType: 'json',
+		url: globalContextPath + '/' + paginaAtual + '/reenviaProposta.do',
+		cache: false,
+		data: data,
+		success: function (retornoJson) {
+			if (!retornoJson) {
+				closeCarregando();
+				jQuery.alertbox({ 'label': 'Erro ao enviar requisi��o para o SPG' });
+			} else {
+				closeCarregando();
+				jQuery.alertbox({ 'label': 'Proposta reenviada com sucesso.' });
+			}
+		},
+		error: function (e) {
+			closeCarregando();
+			jQuery.alertbox({ 'label': 'Ocorreu um erro. Por favor, tente mais tarde.' });
+		}
+	});
+}
+
+
+
+function fechaModalTooltipNovo() {
+	fecharFancy();
+}
+
+
+// INICIO GD 2015-000106
+function validarReativacaoProcesso(numProcesso, nomeAtividade){
+	if ( nomeAtividade != null && nomeAtividade == 'Processo Expirado com CCB Paga' ){
+		displayModalReativarProcesso(numProcesso, nomeAtividade);
+	} else if (nomeAtividade != null && nomeAtividade == 'Reativar Processo' ){
+		validarProcessoNoPeriodoDeVigencia(numProcesso)
+	} else{
+		seguirComProcesso(numProcesso);
+	}
+}
+
+function validarProcessoNoPeriodoDeVigencia(numProcesso){
+	jQuery.ajax({
+        type: "POST",
+        dataType: 'json',
+        url: globalContextPath + "/areaTrabalho/validarReativacaoProcesso.do",
+        cache: false,
+        data: {'numProcessoReativ': numProcesso},
+        success: function(data){
+        	if(!data){
+        		jQuery.alertbox({'label':'Sucursal n&atilde;o est&aacute; dentro da vig&ecirc;ncia para reativa&ccedil;&atilde;o.'});
+            	return false;
+        	}else{
+        		seguirComProcesso(numProcesso);
+        	}
+        },
+        error: function(data){
+        	jQuery.alertbox({'label':'Sucursal n&atilde;o est&aacute; dentro da vig&ecirc;ncia para reativa&ccedil;&atilde;o.'});
+        	return false;
+        }
+	});	
+}
+
+function displayModalReativarProcesso(numProcesso, nomeAtividade){
+	
+	jQuery.alertbox({
+		'label'	  : 'Deseja Reativar o Processo n&deg;: '+numProcesso+' ?',
+		'buttons' : [
+						{'label':'Sim','callback':function(){jQuery.alertbox.close();seguirComProcesso(numProcesso);}},
+						{'label':'N&atilde;o','callback':function(){jQuery.alertbox.close();}}
+					]
+	})
+}
+
+function seguirComProcesso(numProcesso){
+	var link = globalContextPath + "/workflow.do?numProcesso=" + numProcesso;
+	location.href = link;
+	showCarregando();
+}
+
+function esconderModal(){
+	jQuery.fancybox.close();
+}
+// FIM GD 2015-000106
+
+function refreshMyProcess() {
+	showCarregando();
+	jQuery.ajax({
+		type: "POST",
+		dataType: 'json',
+	    url: globalContextPath + "/areaTrabalho/listMyProcess.do",
+		cache: false,
+		data: {},
+	    success: function (data) {
+	   		if (jQuery(data).size() > 0) {
+				var processos = [];
+				var tableBodyMyProcess = jQuery("#slide-panel table tbody");
+				
+				//Limpar linhas existentes
+				tableBodyMyProcess.empty();
+			
+				jQuery.each(data, function(i, atividade) {
+					var colunas = [];
+					
+					var	link = "<a class='link_menu' href='#'>" + atividade.numProcesso + "</a>";
+	
+					colunas.push('<td class="num_processo_link">' + link + '</td>');
+					colunas.push('<td class="atividade">' + atividade.nomeAtividade + "</td>");
+					colunas.push("<td>" + atividade.dataInicio + "</td>");
+				
+					var img = '<img src="' + globalContextPath + '/includes/images/cadeado-fechado-icon.png" '+
+							  'style="border: none; cursor: pointer" onclick="unlockPanel(' + atividade.numProcesso + 
+							  ', this);"/>';
+					colunas.push('<td class="cadeado"><div style="width: 100%; text-align: center;">' + img + '</div></td>');
+	
+					jQuery("<tr />", { "class": ((i % 2) == 0 ? "par" : "impar") , "html": colunas.join("") }).appendTo(tableBodyMyProcess);
+					tableBodyMyProcess.find('tr:last').attr('title',atividade.cnpjEstipulante);
+				});
+				
+				tableBodyMyProcess.find('tr').each(function() {
+					var numProcesso = jQuery(this).find('.link_menu').html();
+					jQuery(this).find('td').not('.cadeado').each(
+						function() {
+							jQuery(this).bind('click',function() {
+								linkBack = globalContextPath + "/workflow.do?numProcesso=" + numProcesso;
+								var elNumProcesso = jQuery('input[name=numProcesso]');
+								if (elNumProcesso.val()) {
+									if (elNumProcesso.val() == numProcesso) {
+										return false;
+									}
+									jQuery.alertbox({
+										'label':'Deseja realmente sair do Processo <b>' + elNumProcesso.val().escape() + '</b>?',
+										'buttons' : [
+														{'label':'Cancelar', 'callback':function(){cancel();}},
+														{'label':'Sair', 'callback':function(){exitLock(linkBack);}},
+														{'label':'Sair e Liberar Processo', 'callback':function(){exitUnlock(linkBack, elNumProcesso.val().escape());}}
+													]
+									});									
+									return false;
+								} else {
+									location.href = linkBack;
+									showCarregando();
+								}
+							});
+						}
+					);
+				});
+				
+				/*jQuery("#slide-titulo .slide-link").addClass("active");
+				drawMyProcess(jQuery("#slide-panel"), true);*/
+				
+			}
+			closeCarregando();			
+	    }
+	});
+}
+
+function visualizarEtapaByAreaDeTrabalho(numProcesso) {
+	var url = globalContextPath + '/popUpEtapaAtual.do?numProcesso=' + numProcesso;
+	jQuery.fancybox({
+		'hideOnOverlayClick': false,
+		'autoDimensions': false,
+		'centerOnScroll': true,
+		'transitionIn': 'none',
+		'transitionOut': 'none',
+		'width': 'auto',
+		'height': 'auto',
+		'padding': 0,
+		'transitionIn': 'none',
+		'transitionOut': 'none',
+		'title': 'Acompanhamento de Processos',
+		'href': url
+	});
+
+	jQuery('div#fancybox-wrap').unbind('mousewheel');
+}
+
+function gerarEstudoByAreaDeTrabalho(numProcesso) {
+	showCarregando();
+	jQuery.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: globalContextPath + '/relatorio/obterEstudoDigitalizado.do',
+        cache: false,
+        data: {
+            'numProcesso': numProcesso
+        },
+        success: function(data) {
+        	if (data.codigoDocumento != 0) {
+        		window.location.assign( globalContextPath + '/relatorio/imprimirEstudoDigitalizado.do?codigoIdEstudo=' + data.codigoDocumento);
+        	} else {
+        		jQuery.alertbox({'label':'N&atilde;o existe estudo armazenado associado a esse processo.'});
+        	}
+        	closeCarregando();
+        },
+        error: function(e){
+        	closeCarregando();
+        	jQuery.alertbox({'label':'Erro ao gerar Estudo Assinado.'});
+        }
+	});
+}
+
+function gerarEstudoEmitidoByAreaDeTrabalho(numProcesso) {
+	showCarregando();
+	jQuery.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: globalContextPath + '/relatorio/obterEstudoDigitalizado.do',
+        cache: false,
+        data: {
+            'numProcesso': numProcesso
+        },
+        success: function(data) {
+        	if (data.codigoDocumento != 0) {
+        		window.location.assign( globalContextPath + '/relatorio/imprimirEstudoDigitalizadoEmitido.do?codigoIdEstudo=' + data.codigoDocumento);
+        	} else {
+        		jQuery.alertbox({'label':'N&atilde;o existe estudo armazenado associado a esse processo.'});
+        	}
+        	closeCarregando();
+        },
+        error: function(e){
+        	closeCarregando();
+        	jQuery.alertbox({'label':'Erro ao gerar Estudo Emitido.'});
+        }
+	});
+}
+
+function gerarPropostaByAreaDeTrabalho(numProcesso) {
+	showCarregando();
+	jQuery.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: globalContextPath + '/relatorio/obterPropostaDigitalizada.do',
+        cache: false,
+        data: {
+            'numProcesso': numProcesso
+        },
+        success: function(data) {
+        	
+        	if (data.codigoDocumento != 0) {
+        		window.location.assign(globalContextPath + '/relatorio/imprimirPropostaDigitalizada.do?codigoIdProposta=' + data.codigoDocumento + '&numProcesso=' + numProcesso);
+        	} else {
+        		jQuery.alertbox({'label':'N&atilde;o existe proposta armazenada associada a esse processo.'});
+        	}
+        	
+        	closeCarregando();
+        }
+	});
+}
+
+function gerarPropostaEmitidaByAreaDeTrabalho(numProcesso) {
+	showCarregando();
+	jQuery.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: globalContextPath + '/relatorio/obterPropostaDigitalizada.do',
+        cache: false,
+        data: {
+            'numProcesso': numProcesso
+        },
+        success: function(data) {
+        	if (data.codigoDocumento != 0) {
+        		window.location.assign(globalContextPath + '/relatorio/imprimirPropostaDigitalizadaEmitida.do?codigoIdProposta=' + data.codigoDocumento + '&numProcesso=' + numProcesso);
+        	} else {
+        		jQuery.alertbox({'label':'N&atilde;o existe proposta armazenada associada a esse processo.'});
+        	}
+        	closeCarregando();
+        }
+	});
+}
+
+function gerarPlanilhaImportacaoVidasByAreaDeTrabalho(numProcesso) {
+	
+	showCarregando();
+	
+	jQuery.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: globalContextPath + '/relatorio/obterPlanilhaImportacaoVidasDigitalizada.do',
+        cache: false,
+        data: {
+            'numProcesso': numProcesso
+        },
+        success: function(data) {
+        	
+        	if (data.codigoDocumento != 0) {
+        		window.location.assign(globalContextPath + '/relatorio/imprimirPlanilhaDigitalizada.do?codigoIdPlanilha=' + data.codigoDocumento + '&numProcesso=' + numProcesso);
+        	} else {
+        		jQuery.alertbox({'label':'N&atilde;o existe planilha armazenada associada a esse processo.'});
+        	}
+        	closeCarregando();
+        },
+        error: function(e){
+        	closeCarregando();
+        	console.log(e);
+        	jQuery.alertbox({'label':'N&atilde;o foi poss&iacute;vel fazer o download da planilha. Por favor tente mais tarde ou entre em contato com o administrador.'});
+        }
+	});
+}
+
+function gerarBoletoByAreaDeTrabalho(numProcesso, elemento) {
+	
+	showCarregando();
+	
+	var tipoBoleto = jQuery(elemento).attr('class');
+	
+	jQuery.ajax({
+        type: 'POST',
+        dataType: 'json',
+        url: globalContextPath + '/relatorio/obterBoletoDigitalizado.do?tipoBoleto=' + tipoBoleto,
+        cache: false,
+        data: {
+            'numProcesso': numProcesso
+        },
+        success: function(boletos) {
+        	
+        	if(boletos.length > 0){
+        		
+	    		 jqry(boletos).each(function(i, boleto){
+	    			 if(boleto.codigoDocumento != 0){
+	    				 window.location.assign(globalContextPath + '/relatorio/imprimirBoletosDigitalizados.do?numProcesso=' + numProcesso + '&idBoleto=' 
+	    						 + boleto.codigoDocumento + '&tipoBoleto=' + tipoBoleto + '&nomeArquivoBoleto=' + boleto.nomeDocumento);
+	    			 } else {
+	    				 jQuery.alertbox({'label':'N&atilde;o existe(m) boleto(s) armazenado(s) associado(s) a este processo.'});
+	    			 }
+	    		 });
+        	}
+        	
+        	closeCarregando();
+        },
+        error: function(e){
+        	closeCarregando();
+        	jQuery.alertbox({'label':'N&atilde;o h&aacute; boleto(s) CCB gerado(s) para este processo.'});
+        }
+	});
+}
+
+function apertarTooltip(el){
+	
+	jQuery(el).tooltip({
+		position: "center left",
+	    effect: "fade",
+	    cancelDefault: true,
+	    delay: 60,
+	    show: true
+	    
+	});
+}
+
+function verificarCcbPendenteProdutorCorretor() {
+	showCarregandoComMensagem();
+	jQuery.ajax({
+        type: "POST",
+        dataType: 'json',
+        url: globalContextPath + "/areaTrabalho/verificarCcbPendenteProdutorCorretor.do",
+        cache: false,
+        data: {} ,
+        success: function (totalProcessosCcbCorretorProdutor) {
+        	closeCarregandoComMensagem();
+        	if(totalProcessosCcbCorretorProdutor > 0){
+				jQuery.alertbox( {'label' : 'Existe(m) ' + totalProcessosCcbCorretorProdutor +  ' processo(s) liberado(s) para pagamento.'});
+				jQuery("#listaAtividades").val('FT_EEEM_SPG_ImplantacaoBoleto');
+				buscarSemFiltro = true;
+				filtroAreaTrabalho(this);
+			}
+        },
+        error: function(e){
+        	closeCarregandoComMensagem();
+        	jQuery.alertbox({'label':'N&atilde;o foi poss&iacute;vel verificar se existem processos pendentes de <br />&nbsp' +  
+        		' pagamento.'});
+        }
+	});
+}
+
